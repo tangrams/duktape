@@ -1,11 +1,11 @@
 /*
- *  Duktape public API for Duktape 1.2.99.
+ *  Duktape public API for Duktape 1.3.1.
  *  See the API reference for documentation on call semantics.
  *  The exposed API is inside the DUK_API_PUBLIC_H_INCLUDED
  *  include guard.  Other parts of the header are Duktape
  *  internal and related to platform/compiler/feature detection.
  *
- *  Git commit 64560f815f1bb762460d02a8df0cac2f93d07eaf (v1.2.0-382-g64560f8-dirty).
+ *  Git commit 247e6dde79178ac2da5d7112a989c85dc8576a8f (v1.3.1).
  *
  *  See Duktape AUTHORS.rst and LICENSE.txt for copyright and
  *  licensing information.
@@ -59,8 +59,9 @@
  *  Please include an e-mail address, a link to your GitHub profile, or something
  *  similar to allow your contribution to be identified accurately.
  *  
- *  The following people have contributed code and agreed to irrevocably license
- *  their contributions under the Duktape ``LICENSE.txt`` (in order of appearance):
+ *  The following people have contributed code, website contents, or Wiki contents,
+ *  and agreed to irrevocably license their contributions under the Duktape
+ *  ``LICENSE.txt`` (in order of appearance):
  *  
  *  * Sami Vaarala <sami.vaarala@iki.fi>
  *  * Niki Dobrev
@@ -68,6 +69,7 @@
  *  * L\u00e1szl\u00f3 Lang\u00f3 <llango.u-szeged@partner.samsung.com>
  *  * Legimet <legimet.calc@gmail.com>
  *  * Karl Skomski <karl@skomski.com>
+ *  * Bruce Pascoe <fatcerberus1@gmail.com>
  *  
  *  Other contributions
  *  ===================
@@ -208,13 +210,13 @@ struct duk_number_list_entry {
  * have 99 for patch level (e.g. 0.10.99 would be a development version
  * after 0.10.0 but before the next official release).
  */
-#define DUK_VERSION                       10299L
+#define DUK_VERSION                       10301L
 
 /* Git describe for Duktape build.  Useful for non-official snapshot builds
  * so that application code can easily log which Duktape snapshot was used.
  * Not available in the Ecmascript environment.
  */
-#define DUK_GIT_DESCRIBE                  "v1.2.0-382-g64560f8-dirty"
+#define DUK_GIT_DESCRIBE                  "v1.3.1"
 
 /* Duktape debug protocol version used by this build. */
 #define DUK_DEBUG_PROTOCOL_VERSION        1
@@ -536,16 +538,36 @@ DUK_EXTERNAL_DECL duk_idx_t duk_push_error_object_va_raw(duk_context *ctx, duk_e
 	duk_push_error_object_va_raw((ctx), (err_code), (const char *) (__FILE__), (duk_int_t) (__LINE__), (fmt), (ap))
 
 #define DUK_BUF_FLAG_DYNAMIC   (1 << 0)    /* internal flag: dynamic buffer */
-#define DUK_BUF_FLAG_NOZERO    (1 << 1)    /* internal flag: don't zero allocated buffer */
+#define DUK_BUF_FLAG_EXTERNAL  (1 << 1)    /* internal flag: external buffer */
+#define DUK_BUF_FLAG_NOZERO    (1 << 2)    /* internal flag: don't zero allocated buffer */
 
 DUK_EXTERNAL_DECL void *duk_push_buffer_raw(duk_context *ctx, duk_size_t size, duk_small_uint_t flags);
 
 #define duk_push_buffer(ctx,size,dynamic) \
-	duk_push_buffer_raw((ctx), (size), (dynamic));
+	duk_push_buffer_raw((ctx), (size), (dynamic) ? DUK_BUF_FLAG_DYNAMIC : 0);
 #define duk_push_fixed_buffer(ctx,size) \
-	duk_push_buffer_raw((ctx), (size), 0 /*dynamic*/)
+	duk_push_buffer_raw((ctx), (size), 0 /*flags*/)
 #define duk_push_dynamic_buffer(ctx,size) \
-	duk_push_buffer_raw((ctx), (size), 1 /*dynamic*/)
+	duk_push_buffer_raw((ctx), (size), DUK_BUF_FLAG_DYNAMIC /*flags*/)
+#define duk_push_external_buffer(ctx) \
+	((void) duk_push_buffer_raw((ctx), 0, DUK_BUF_FLAG_DYNAMIC | DUK_BUF_FLAG_EXTERNAL))
+
+#define DUK_BUFOBJ_CREATE_ARRBUF       (1 << 4)  /* internal flag: create backing ArrayBuffer; keep in one byte */
+#define DUK_BUFOBJ_DUKTAPE_BUFFER      0
+#define DUK_BUFOBJ_NODEJS_BUFFER       1
+#define DUK_BUFOBJ_ARRAYBUFFER         2
+#define DUK_BUFOBJ_DATAVIEW            (3 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_INT8ARRAY           (4 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_UINT8ARRAY          (5 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_UINT8CLAMPEDARRAY   (6 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_INT16ARRAY          (7 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_UINT16ARRAY         (8 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_INT32ARRAY          (9 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_UINT32ARRAY         (10 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_FLOAT32ARRAY        (11 | DUK_BUFOBJ_CREATE_ARRBUF)
+#define DUK_BUFOBJ_FLOAT64ARRAY        (12 | DUK_BUFOBJ_CREATE_ARRBUF)
+
+DUK_EXTERNAL_DECL void duk_push_buffer_object(duk_context *ctx, duk_idx_t idx_buffer, duk_size_t byte_offset, duk_size_t byte_length, duk_uint_t flags);
 
 DUK_EXTERNAL_DECL duk_idx_t duk_push_heapptr(duk_context *ctx, void *ptr);
 
@@ -592,8 +614,18 @@ DUK_EXTERNAL_DECL duk_bool_t duk_is_thread(duk_context *ctx, duk_idx_t index);
 DUK_EXTERNAL_DECL duk_bool_t duk_is_callable(duk_context *ctx, duk_idx_t index);
 DUK_EXTERNAL_DECL duk_bool_t duk_is_dynamic_buffer(duk_context *ctx, duk_idx_t index);
 DUK_EXTERNAL_DECL duk_bool_t duk_is_fixed_buffer(duk_context *ctx, duk_idx_t index);
+DUK_EXTERNAL_DECL duk_bool_t duk_is_external_buffer(duk_context *ctx, duk_idx_t index);
 
-DUK_EXTERNAL_DECL duk_bool_t duk_is_primitive(duk_context *ctx, duk_idx_t index);
+#define duk_is_primitive(ctx,index) \
+	duk_check_type_mask((ctx), (index), DUK_TYPE_MASK_UNDEFINED | \
+	                                    DUK_TYPE_MASK_NULL | \
+	                                    DUK_TYPE_MASK_BOOLEAN | \
+	                                    DUK_TYPE_MASK_NUMBER | \
+	                                    DUK_TYPE_MASK_STRING | \
+	                                    DUK_TYPE_MASK_BUFFER | \
+	                                    DUK_TYPE_MASK_POINTER | \
+	                                    DUK_TYPE_MASK_LIGHTFUNC)
+
 #define duk_is_object_coercible(ctx,index) \
 	duk_check_type_mask((ctx), (index), DUK_TYPE_MASK_BOOLEAN | \
 	                                    DUK_TYPE_MASK_NUMBER | \
@@ -719,6 +751,7 @@ DUK_EXTERNAL_DECL void duk_json_decode(duk_context *ctx, duk_idx_t index);
 
 DUK_EXTERNAL_DECL void *duk_resize_buffer(duk_context *ctx, duk_idx_t index, duk_size_t new_size);
 DUK_EXTERNAL_DECL void *duk_steal_buffer(duk_context *ctx, duk_idx_t index, duk_size_t *out_size);
+DUK_EXTERNAL_DECL void duk_config_buffer(duk_context *ctx, duk_idx_t index, void *ptr, duk_size_t len);
 
 /*
  *  Property access
